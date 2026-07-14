@@ -636,6 +636,12 @@ function fileToBase64(file){
   });
 }
 
+function makeJobId(){
+  return 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
 async function extractFromPDF(){
   const fileInput = document.getElementById('pdfFile');
   const file = fileInput.files[0];
@@ -658,60 +664,67 @@ async function extractFromPDF(){
     return;
   }
 
-  statusEl.textContent = 'Yapay zekaya gönderiliyor... (birkaç saniye sürebilir)';
+  const jobId = makeJobId();
 
-  let res;
+  statusEl.textContent = 'İşlem başlatılıyor...';
   try{
-    res = await fetch('/.netlify/functions/extract-teklif', {
+    await fetch('/.netlify/functions/extract-teklif-background', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ pdfBase64: base64, fileName: file.name })
+      body: JSON.stringify({ pdfBase64: base64, fileName: file.name, jobId })
     });
   }catch(e){
-    console.error('fetch hatası:', e);
-    statusEl.textContent = 'Sunucuya bağlanılamadı (ağ hatası): ' + e.message;
+    console.error('Başlatma hatası:', e);
+    statusEl.textContent = 'İşlem başlatılamadı (ağ hatası): ' + e.message;
     statusEl.className = 'status err';
     return;
   }
 
-  const contentType = res.headers.get('content-type') || '';
-  if(!contentType.includes('application/json')){
-    const rawText = await res.text().catch(()=>'(okunamadı)');
-    console.error('Beklenmeyen yanıt türü:', contentType, rawText);
-    statusEl.textContent = 'Fonksiyon bulunamadı veya beklenmeyen yanıt döndü (HTTP ' + res.status + '). ' +
-      'Netlify\'da /netlify/functions/extract-teklif.js dosyasının doğru deploy olduğunu ve ' +
-      'ANTHROPIC_API_KEY ortam değişkeninin ayarlı olduğunu kontrol edin. Detay: ' + rawText.slice(0,300);
-    statusEl.className = 'status err';
-    return;
+  // Arka plan fonksiyonu 202 ile hemen döner; sonucu yoklayarak (polling) bekliyoruz.
+  const maxWaitMs = 90000;   // 90 saniye üst sınır
+  const intervalMs = 2500;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs){
+    await sleep(intervalMs);
+    const elapsed = Math.round((Date.now()-startTime)/1000);
+    statusEl.textContent = `Yapay zeka PDF'i analiz ediyor... (${elapsed} sn)`;
+
+    let statusRes;
+    try{
+      statusRes = await fetch('/.netlify/functions/extract-status?jobId=' + encodeURIComponent(jobId));
+    }catch(e){
+      continue; // geçici ağ hatasında yoklamaya devam et
+    }
+    if(!statusRes.ok) continue;
+
+    let statusJson;
+    try{
+      statusJson = await statusRes.json();
+    }catch(e){
+      continue;
+    }
+
+    if(statusJson.status === 'pending' || statusJson.status === 'processing'){
+      continue;
+    }
+    if(statusJson.status === 'error'){
+      statusEl.textContent = 'Hata: ' + statusJson.error;
+      statusEl.className = 'status err';
+      return;
+    }
+    if(statusJson.status === 'done'){
+      const data = statusJson.data;
+      data.agency = AGENCY;
+      document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
+      statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
+      statusEl.className = 'status ok';
+      return;
+    }
   }
 
-  let json;
-  try{
-    json = await res.json();
-  }catch(e){
-    console.error('JSON ayrıştırma hatası:', e);
-    statusEl.textContent = 'Sunucu yanıtı okunamadı: ' + e.message;
-    statusEl.className = 'status err';
-    return;
-  }
-
-  if(!res.ok || json.error){
-    statusEl.textContent = 'Hata: ' + (json.error || ('Sunucu ' + res.status + ' döndürdü.'));
-    statusEl.className = 'status err';
-    return;
-  }
-
-  try{
-    const data = json.data;
-    data.agency = AGENCY;
-    document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
-    statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
-    statusEl.className = 'status ok';
-  }catch(e){
-    console.error('Veri işleme hatası:', e);
-    statusEl.textContent = 'Yapay zekadan gelen veri işlenemedi: ' + e.message;
-    statusEl.className = 'status err';
-  }
+  statusEl.textContent = '90 saniye içinde sonuç alınamadı. PDF çok büyük/karmaşık olabilir, lütfen tekrar deneyin.';
+  statusEl.className = 'status err';
 }
 
 /* ===================== UI BAĞLANTILARI ===================== */
