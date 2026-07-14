@@ -667,8 +667,9 @@ async function extractFromPDF(){
   const jobId = makeJobId();
 
   statusEl.textContent = 'İşlem başlatılıyor...';
+  let triggerRes;
   try{
-    await fetch('/.netlify/functions/extract-teklif-background', {
+    triggerRes = await fetch('/.netlify/functions/extract-teklif-background', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ pdfBase64: base64, fileName: file.name, jobId })
@@ -676,6 +677,23 @@ async function extractFromPDF(){
   }catch(e){
     console.error('Başlatma hatası:', e);
     statusEl.textContent = 'İşlem başlatılamadı (ağ hatası): ' + e.message;
+    statusEl.className = 'status err';
+    return;
+  }
+  console.log('Tetikleme yanıtı:', triggerRes.status, triggerRes.statusText);
+  if(triggerRes.status === 404){
+    statusEl.textContent = 'Fonksiyon bulunamadı (HTTP 404). netlify/functions/extract-teklif-background.js dosyasının doğru yolda deploy olduğunu kontrol edin.';
+    statusEl.className = 'status err';
+    return;
+  }
+  if(triggerRes.status === 403){
+    statusEl.textContent = 'Erişim engellendi (HTTP 403). Netlify site ayarlarında erişim kısıtlaması (password protection / visitor access) olabilir.';
+    statusEl.className = 'status err';
+    return;
+  }
+  if(triggerRes.status >= 400){
+    const t = await triggerRes.text().catch(()=>'(okunamadı)');
+    statusEl.textContent = 'Beklenmeyen başlatma hatası (HTTP ' + triggerRes.status + '): ' + t.slice(0,200);
     statusEl.className = 'status err';
     return;
   }
