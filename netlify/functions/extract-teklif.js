@@ -25,6 +25,9 @@ KURALLAR:
 - "primaryCard": motorlu araç poliçelerinde araç bilgilerini (marka/tip, model yılı, plaka), sağlık poliçelerinde
   sigortalı bilgilerini, diğer ürünlerde en uygun özet bilgiyi içermeli. İsim/kimlik gibi hassas bilgiler PDF'te
   zaten maskelenmişse (örn. "E***N T***N") maskeli haliyle bırak; ASLA tahmin ederek tamamlama veya maskeyi açma.
+  "fields" dizisinde EN FAZLA 6 alan olsun; PDF'te daha fazla alan varsa sigortalı için en önemli olanları seç
+  (örn. araç için marka/model, model yılı, plaka her zaman öncelikli; motor gücü, koltuk sayısı gibi ikincil
+  bilgiler yalnızca yer varsa eklenir).
 - "icon" alanı için sadece "car", "calendar" veya null kullan.
 - "insurerKey" alanına şirketi şu listeden en uygun olanla eşleştir: "axa", "zurich", "alfa", "capital", "diger".
   Emin değilsen "diger" yaz.
