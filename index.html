@@ -237,9 +237,25 @@ function drawTitleBlock(data){
 function drawPrimaryCard(data){
   if(!data.primaryCard) return;
   const card = data.primaryCard;
-  const PAD=6, cardH=26;
+  const fields = card.fields || [];
+  const PAD = 6;
+  const colsPerRow = Math.min(3, Math.max(1, fields.length));
+  const nRows = Math.ceil(fields.length / colsPerRow) || 1;
+  const titleAreaH = 14;
+  const colW = (CW - 2*PAD) / colsPerRow;
+
+  doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
+  let maxLines = 1;
+  const wrappedValues = fields.map(f=>{
+    const lines = doc.splitTextToSize(String(f.value), colW-4);
+    if(lines.length > maxLines) maxLines = lines.length;
+    return lines;
+  });
+  const rowH = 5 + maxLines*3.9 + 2;
+  const cardH = titleAreaH + nRows*rowH + 5;
+
   ensureSpace(data, cardH+8);
-  const top=y;
+  const top = y;
   setFill(doc, COLORS.white); setDraw(doc, COLORS.border); doc.setLineWidth(0.3);
   doc.roundedRect(LM, top, CW, cardH, 2.6, 2.6, 'FD');
   setFill(doc, COLORS.gold); doc.rect(LM, top, CW, 0.9, 'F');
@@ -248,29 +264,43 @@ function drawPrimaryCard(data){
   setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.8);
   doc.text(card.title, titleX, top+11);
 
-  const n = card.fields.length;
-  const fieldStartX = card.icon ? LM+PAD+20 : LM+PAD;
-  const positions = n<=3 ? [fieldStartX, LM+CW*0.60, LM+CW*0.82] : null;
-  card.fields.forEach((f,i)=>{
-    const fx = positions ? positions[i] : (fieldStartX + i*(CW-(fieldStartX-LM))/n);
+  fields.forEach((f,i)=>{
+    const col = i % colsPerRow;
+    const row = Math.floor(i / colsPerRow);
+    const fx = LM+PAD + col*colW;
+    const fy = top + titleAreaH + row*rowH;
     setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
-    doc.text(f.label, fx, top+18);
-    setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(10);
-    doc.text(f.value, fx, top+22.5);
+    doc.text(String(f.label), fx, fy);
+    setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
+    wrappedValues[i].forEach((ln,li)=> doc.text(ln, fx, fy+4.6+li*3.9));
   });
   y = top + cardH + 8;
+}
+
+function measureSecondaryCard(card){
+  if(card.type==='insurer'){
+    const titleH = 10;
+    const logoBlockH = 15 + 6;              // logo + alt boşluk
+    const linesCount = 1 + ((card.lines||[]).length); // sigorta adı + ek satırlar
+    const linesBlockH = 4.2*linesCount + 8;
+    return titleH + Math.max(logoBlockH, linesBlockH);
+  } else {
+    const rowsCount = (card.rows||[]).length;
+    return 14 + rowsCount*6.3 + 5;
+  }
 }
 
 function drawSecondaryCards(data){
   const cards = data.secondaryCards || [];
   if(cards.length===0) return;
-  const PAD=6, gap=6, cardH=32;
+  const PAD=6, gap=6;
   const colW = cards.length===1 ? CW : (CW-gap)/2;
 
   for(let i=0;i<cards.length;i+=2){
+    const rowCards = cards.slice(i,i+2);
+    const cardH = Math.max(30, ...rowCards.map(measureSecondaryCard));
     ensureSpace(data, cardH+8);
     const top=y;
-    const rowCards = cards.slice(i,i+2);
     rowCards.forEach((card,idx)=>{
       const x0 = LM + idx*(colW+gap);
       setFill(doc, COLORS.white); setDraw(doc, COLORS.border); doc.setLineWidth(0.3);
@@ -285,9 +315,9 @@ function drawSecondaryCards(data){
         if(logo) doc.addImage(logo.data, logo.format, x0+PAD, logoTop, logoW, logoH);
         const tx = x0+PAD+logoW+5;
         setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(8.8);
-        doc.text(card.insurerName, tx, logoTop+4);
+        doc.text(String(card.insurerName||''), tx, logoTop+4);
         setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.4);
-        (card.lines||[]).forEach((ln,li)=> doc.text(ln, tx, logoTop+9+li*4.2));
+        (card.lines||[]).forEach((ln,li)=> doc.text(String(ln), tx, logoTop+9+li*4.2));
       } else {
         if(card.icon==='calendar') iconCalendar(doc, x0+PAD, top+7);
         setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
@@ -295,9 +325,9 @@ function drawSecondaryCards(data){
         let ry = top+17.5;
         (card.rows||[]).forEach(r=>{
           setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.2);
-          doc.text(r.label, x0+PAD, ry);
+          doc.text(String(r.label), x0+PAD, ry);
           setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(8.8);
-          doc.text(r.value, x0+colW-PAD, ry, {align:'right'});
+          doc.text(String(r.value), x0+colW-PAD, ry, {align:'right'});
           ry += 6.3;
         });
       }
@@ -615,28 +645,71 @@ async function extractFromPDF(){
     statusEl.className = 'status err';
     return;
   }
-  statusEl.textContent = 'PDF okunuyor ve yapay zekaya gönderiliyor... (birkaç saniye sürebilir)';
+  statusEl.textContent = 'PDF okunuyor...';
   statusEl.className = 'status';
+
+  let base64;
   try{
-    const base64 = await fileToBase64(file);
-    const res = await fetch('/.netlify/functions/extract-teklif', {
+    base64 = await fileToBase64(file);
+  }catch(e){
+    console.error('fileToBase64 hatası:', e);
+    statusEl.textContent = 'PDF dosyası okunamadı: ' + e.message;
+    statusEl.className = 'status err';
+    return;
+  }
+
+  statusEl.textContent = 'Yapay zekaya gönderiliyor... (birkaç saniye sürebilir)';
+
+  let res;
+  try{
+    res = await fetch('/.netlify/functions/extract-teklif', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ pdfBase64: base64, fileName: file.name })
     });
-    const json = await res.json();
-    if(!res.ok || json.error){
-      statusEl.textContent = 'Hata: ' + (json.error || ('Sunucu ' + res.status + ' döndürdü.'));
-      statusEl.className = 'status err';
-      return;
-    }
+  }catch(e){
+    console.error('fetch hatası:', e);
+    statusEl.textContent = 'Sunucuya bağlanılamadı (ağ hatası): ' + e.message;
+    statusEl.className = 'status err';
+    return;
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if(!contentType.includes('application/json')){
+    const rawText = await res.text().catch(()=>'(okunamadı)');
+    console.error('Beklenmeyen yanıt türü:', contentType, rawText);
+    statusEl.textContent = 'Fonksiyon bulunamadı veya beklenmeyen yanıt döndü (HTTP ' + res.status + '). ' +
+      'Netlify\'da /netlify/functions/extract-teklif.js dosyasının doğru deploy olduğunu ve ' +
+      'ANTHROPIC_API_KEY ortam değişkeninin ayarlı olduğunu kontrol edin. Detay: ' + rawText.slice(0,300);
+    statusEl.className = 'status err';
+    return;
+  }
+
+  let json;
+  try{
+    json = await res.json();
+  }catch(e){
+    console.error('JSON ayrıştırma hatası:', e);
+    statusEl.textContent = 'Sunucu yanıtı okunamadı: ' + e.message;
+    statusEl.className = 'status err';
+    return;
+  }
+
+  if(!res.ok || json.error){
+    statusEl.textContent = 'Hata: ' + (json.error || ('Sunucu ' + res.status + ' döndürdü.'));
+    statusEl.className = 'status err';
+    return;
+  }
+
+  try{
     const data = json.data;
     data.agency = AGENCY;
     document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
     statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
     statusEl.className = 'status ok';
   }catch(e){
-    statusEl.textContent = 'Beklenmeyen hata: ' + e.message;
+    console.error('Veri işleme hatası:', e);
+    statusEl.textContent = 'Yapay zekadan gelen veri işlenemedi: ' + e.message;
     statusEl.className = 'status err';
   }
 }
