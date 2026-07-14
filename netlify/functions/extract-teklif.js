@@ -49,7 +49,10 @@ JSON ŞEMASI (alan adlarını birebir koru):
     {"type": "info", "title": "POLİÇE SÜRESİ", "icon": "calendar",
      "rows": [{"label": string, "value": string}]},
     {"type": "insurer", "title": "SİGORTA ŞİRKETİ", "logoKey": string,
-     "insurerName": string, "lines": [string]}
+     "insurerName": string,
+     "lines": [string]}
+     // "lines": KISA bilgi satırları, örn. "Poliçe No: 123", "Tic. Sicil No: 456" —
+     // her satır en fazla 6-7 kelime olsun, uzun açıklama cümlesi YAZMA
   ],
   "coverageIntro": {"title": string, "desc": string},
   "coverages": [
