@@ -241,7 +241,7 @@ function drawPrimaryCard(data){
   const PAD = 6;
   const colsPerRow = Math.min(3, Math.max(1, fields.length));
   const nRows = Math.ceil(fields.length / colsPerRow) || 1;
-  const titleAreaH = 14;
+  const titleAreaH = card.icon ? 20 : 14;
   const colW = (CW - 2*PAD) / colsPerRow;
 
   doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
@@ -279,10 +279,16 @@ function drawPrimaryCard(data){
 
 function measureSecondaryCard(card){
   if(card.type==='insurer'){
+    const PAD=6, logoW=15;
     const titleH = 10;
-    const logoBlockH = 15 + 6;              // logo + alt boşluk
-    const linesCount = 1 + ((card.lines||[]).length); // sigorta adı + ek satırlar
-    const linesBlockH = 4.2*linesCount + 8;
+    const logoBlockH = 15 + 6;
+    const textW = ((card._colW||90) - PAD - logoW - 5 - PAD);
+    const nameLines = doc.splitTextToSize(String(card.insurerName||''), textW);
+    let lineCount = nameLines.length;
+    (card.lines||[]).forEach(ln=>{
+      lineCount += doc.splitTextToSize(String(ln), textW).length;
+    });
+    const linesBlockH = 4.2*lineCount + 8;
     return titleH + Math.max(logoBlockH, linesBlockH);
   } else {
     const rowsCount = (card.rows||[]).length;
@@ -298,6 +304,7 @@ function drawSecondaryCards(data){
 
   for(let i=0;i<cards.length;i+=2){
     const rowCards = cards.slice(i,i+2);
+    rowCards.forEach(card=> card._colW = colW);
     const cardH = Math.max(30, ...rowCards.map(measureSecondaryCard));
     ensureSpace(data, cardH+8);
     const top=y;
@@ -314,10 +321,19 @@ function drawSecondaryCards(data){
         const logoW=15, logoH=15, logoTop=top+15;
         if(logo) doc.addImage(logo.data, logo.format, x0+PAD, logoTop, logoW, logoH);
         const tx = x0+PAD+logoW+5;
+        const textW = colW - PAD - logoW - 5 - PAD;
+        let ty = logoTop+4;
         setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(8.8);
-        doc.text(String(card.insurerName||''), tx, logoTop+4);
+        wrapText(doc, String(card.insurerName||''), 'DejaVu','bold',8.8, textW).forEach(ln=>{
+          doc.text(ln, tx, ty); ty += 4.2;
+        });
         setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.4);
-        (card.lines||[]).forEach((ln,li)=> doc.text(String(ln), tx, logoTop+9+li*4.2));
+        ty += 0.8;
+        (card.lines||[]).forEach(ln=>{
+          wrapText(doc, String(ln), 'DejaVu','normal',7.4, textW).forEach(wln=>{
+            doc.text(wln, tx, ty); ty += 4.2;
+          });
+        });
       } else {
         if(card.icon==='calendar') iconCalendar(doc, x0+PAD, top+7);
         setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
