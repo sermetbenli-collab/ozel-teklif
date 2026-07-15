@@ -228,23 +228,32 @@ function drawMainHeader(data){
 
 function drawContinuationHeader(data){
   setText(doc, COLORS.ink);
+  const rightLabel = 'Çalışma No: ' + data.meta.calismaNo;
+  doc.setFont('DejaVu','normal'); doc.setFontSize(8.3);
+  const rightW = doc.getTextWidth(rightLabel) + 4;
+  const leftMaxW = CW - rightW - 4;
+  const titleLines = wrapText(doc, data.meta.policyTitle + ' — Devamı', 'DejaVuSerif','bold',12.5, leftMaxW);
   doc.setFont('DejaVuSerif','bold'); doc.setFontSize(12.5);
-  doc.text(data.meta.policyTitle + ' — Devamı', LM, 16);
+  doc.text(titleLines[0], LM, 16);
   setText(doc, COLORS.textGray);
   doc.setFont('DejaVu','normal'); doc.setFontSize(8.3);
-  doc.text('Çalışma No: ' + data.meta.calismaNo, PAGE_W-RM, 16, {align:'right'});
+  doc.text(rightLabel, PAGE_W-RM, 16, {align:'right'});
   setDraw(doc, COLORS.gold); doc.setLineWidth(0.5);
   doc.line(LM, 19, PAGE_W-RM, 19);
 }
 
 function drawTitleBlock(data){
   setText(doc, COLORS.ink);
-  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(16);
-  doc.text(data.meta.policyTitle, LM, y);
-  y += 9;
+  wrapText(doc, data.meta.policyTitle, 'DejaVuSerif','bold',16, CW).forEach(ln=>{
+    doc.text(ln, LM, y); y += 7;
+  });
+  y += 2;
   setText(doc, COLORS.textGray);
-  doc.setFont('DejaVu','normal'); doc.setFontSize(9.4);
-  data.meta.greeting.forEach(line=>{ doc.text(line, LM, y); y += 5; });
+  data.meta.greeting.forEach(line=>{
+    wrapText(doc, String(line), 'DejaVu','normal',9.4, CW).forEach(ln=>{
+      doc.text(ln, LM, y); y += 5;
+    });
+  });
   y += 8;
 }
 
@@ -258,14 +267,20 @@ function drawPrimaryCard(data){
   const titleAreaH = card.icon ? 21 : 14;
   const colW = (CW - 2*PAD) / colsPerRow;
 
-  doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
-  let maxLines = 1;
-  const wrappedValues = fields.map(f=>{
-    const lines = doc.splitTextToSize(String(f.value), colW-4);
-    if(lines.length > maxLines) maxLines = lines.length;
+  let maxLabelLines = 1, maxValueLines = 1;
+  const wrappedLabels = fields.map(f=>{
+    const lines = wrapText(doc, String(f.label), 'DejaVu','normal',7.5, colW-4);
+    if(lines.length > maxLabelLines) maxLabelLines = lines.length;
     return lines;
   });
-  const rowH = 5 + maxLines*3.9 + 2;
+  const wrappedValues = fields.map(f=>{
+    const lines = wrapText(doc, String(f.value), 'DejaVu','bold',9.5, colW-4);
+    if(lines.length > maxValueLines) maxValueLines = lines.length;
+    return lines;
+  });
+  const labelBlockH = maxLabelLines*3.4;
+  const valueBlockH = maxValueLines*3.9;
+  const rowH = 5 + labelBlockH + valueBlockH;
   const cardH = titleAreaH + nRows*rowH + 5;
 
   ensureSpace(data, cardH+8);
@@ -274,9 +289,12 @@ function drawPrimaryCard(data){
   doc.roundedRect(LM, top, CW, cardH, 2.6, 2.6, 'FD');
   setFill(doc, COLORS.gold); doc.rect(LM, top, CW, 0.9, 'F');
   if(card.icon==='car') iconCar(doc, LM+PAD, top+8);
+  const titleMaxW = CW - (card.icon ? PAD+20 : PAD) - PAD;
   const titleX = card.icon ? LM+PAD+20 : LM+PAD;
   setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.8);
-  doc.text(card.title, titleX, top+11);
+  wrapText(doc, String(card.title), 'DejaVu','bold',9.8, titleMaxW).slice(0,1).forEach(ln=>{
+    doc.text(ln, titleX, top+11);
+  });
 
   fields.forEach((f,i)=>{
     const col = i % colsPerRow;
@@ -284,16 +302,19 @@ function drawPrimaryCard(data){
     const fx = LM+PAD + col*colW;
     const fy = top + titleAreaH + row*rowH;
     setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
-    doc.text(String(f.label), fx, fy);
+    let ly = fy;
+    wrappedLabels[i].forEach(ln=>{ doc.text(ln, fx, ly); ly += 3.4; });
     setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
-    wrappedValues[i].forEach((ln,li)=> doc.text(ln, fx, fy+4.6+li*3.9));
+    let vy = fy + labelBlockH + 3.2;
+    wrappedValues[i].forEach(ln=>{ doc.text(ln, fx, vy); vy += 3.9; });
   });
   y = top + cardH + 8;
 }
 
 function measureSecondaryCard(card){
+  const PAD=6;
   if(card.type==='insurer'){
-    const PAD=6, logoW=15;
+    const logoW=15;
     const titleH = 10;
     const logoBlockH = 15 + 6;
     const textW = ((card._colW||90) - PAD - logoW - 5 - PAD);
@@ -305,8 +326,17 @@ function measureSecondaryCard(card){
     const linesBlockH = 4.2*lineCount + 8;
     return titleH + Math.max(logoBlockH, linesBlockH);
   } else {
-    const rowsCount = (card.rows||[]).length;
-    return 22 + Math.max(0, rowsCount-1)*6.3 + 8;
+    const rows = card.rows || [];
+    const colW = card._colW || 90;
+    const labelW = colW*0.5 - PAD;
+    const valueW = colW*0.5 - PAD;
+    let totalRowsH = 0;
+    rows.forEach(r=>{
+      const lLines = doc.splitTextToSize(String(r.label), labelW).length;
+      const vLines = doc.splitTextToSize(String(r.value), valueW).length;
+      totalRowsH += Math.max(lLines, vLines) * 4.2 + 2;
+    });
+    return 22 + totalRowsH + 4;
   }
 }
 
@@ -352,13 +382,17 @@ function drawSecondaryCards(data){
         if(card.icon==='calendar') iconCalendar(doc, x0+PAD, top+7);
         setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
         doc.text(card.title, x0+PAD+19, top+10);
+        const labelW = colW*0.5 - PAD;
+        const valueW = colW*0.5 - PAD;
         let ry = top+22;
         (card.rows||[]).forEach(r=>{
+          const lLines = wrapText(doc, String(r.label), 'DejaVu','normal',8.2, labelW);
+          const vLines = wrapText(doc, String(r.value), 'DejaVu','bold',8.8, valueW);
           setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.2);
-          doc.text(String(r.label), x0+PAD, ry);
+          lLines.forEach((ln,li)=> doc.text(ln, x0+PAD, ry+li*4.2));
           setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(8.8);
-          doc.text(String(r.value), x0+colW-PAD, ry, {align:'right'});
-          ry += 6.3;
+          vLines.forEach((ln,li)=> doc.text(ln, x0+colW-PAD, ry+li*4.2, {align:'right'}));
+          ry += Math.max(lLines.length, vLines.length)*4.2 + 2;
         });
       }
     });
@@ -370,34 +404,41 @@ function drawCoverageSection(data){
   if(!data.coverages || data.coverages.length===0) return;
   ensureSpace(data, 20);
   setText(doc, COLORS.ink); doc.setFont('DejaVuSerif','bold'); doc.setFontSize(13.5);
-  doc.text(data.coverageIntro.title, LM, y);
-  y += 6.5;
+  wrapText(doc, data.coverageIntro.title, 'DejaVuSerif','bold',13.5, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=6; });
+  y += 0.5;
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(9);
   wrapText(doc, data.coverageIntro.desc, 'DejaVu','normal',9, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=4.6; });
   y += 5.5;
 
-  const gap=6, covW=(CW-gap)/2, covH=34, PAD=6;
+  const gap=6, covW=(CW-gap)/2, PAD=6;
+  const baseH = 34;
+
   for(let i=0;i<data.coverages.length;i+=2){
+    const pair = data.coverages.slice(i,i+2);
+    const textW = covW-PAD-19-PAD;
+    const titleLinesArr = pair.map(cov => wrapText(doc, String(cov.title), 'DejaVu','bold',10.4, textW));
+    const maxTitleLines = Math.max(...titleLinesArr.map(l=>l.length));
+    const covH = baseH + Math.max(0, maxTitleLines-1)*4.8;
+
     ensureSpace(data, covH+10);
     const top=y;
-    const pair = data.coverages.slice(i,i+2);
     pair.forEach((cov,idx)=>{
       const x0 = LM + idx*(covW+gap);
       setFill(doc, COLORS.bgAccent);
       doc.roundedRect(x0, top, covW, covH, 2.6, 2.6, 'F');
       const iconColor = idx===0 ? COLORS.ink : COLORS.gold;
       iconShield(doc, x0+PAD, top+6, iconColor, cov.iconLabel||null);
-      const tx = x0+PAD+19, textW = covW-PAD-19-PAD;
+      const tx = x0+PAD+19;
       setText(doc, COLORS.gold); doc.setFont('DejaVu','bold'); doc.setFontSize(7.4);
       doc.text(cov.eyebrow, tx, top+8);
       setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(10.4);
       let ty = top+13;
-      wrapText(doc, cov.title, 'DejaVu','bold',10.4, textW).slice(0,1).forEach(ln=>{ doc.text(ln, tx, ty); });
+      titleLinesArr[idx].forEach(ln=>{ doc.text(ln, tx, ty); ty += 4.8; });
       setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(15);
-      doc.text(cov.amount, tx, top+covH-15);
+      doc.text(String(cov.amount), tx, top+covH-15);
       setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
       let dy = top+covH-9;
-      wrapText(doc, cov.desc, 'DejaVu','normal',7.5, covW-2*PAD).forEach(ln=>{ doc.text(ln, x0+PAD, dy); dy+=3.6; });
+      wrapText(doc, String(cov.desc), 'DejaVu','normal',7.5, covW-2*PAD).forEach(ln=>{ doc.text(ln, x0+PAD, dy); dy+=3.6; });
     });
     y = top + covH + (i+2<data.coverages.length ? 6 : 10);
   }
@@ -443,18 +484,26 @@ function drawPremiumSection(data){
   doc.text('Prim Özeti', LM, y);
   y += 9;
 
-  const rowH = 8.5;
-  ensureSpace(data, rowH*p.rows.length + 40);
+  const labelW = CW*0.62, valueW = CW*0.32;
+  const wrappedRows = p.rows.map(r=>({
+    label: wrapText(doc, String(r.label), 'DejaVu','normal',9.2, labelW),
+    value: wrapText(doc, String(r.value), 'DejaVu','bold',9.8, valueW)
+  }));
+  const rowHeights = wrappedRows.map(wr => Math.max(wr.label.length, wr.value.length)*4.6 + 3.4);
+  const totalTableH = rowHeights.reduce((a,b)=>a+b,0);
+
+  ensureSpace(data, totalTableH + 40);
   const tableTop = y;
   setFill(doc, COLORS.bgCard);
-  doc.rect(LM, tableTop, CW, rowH*p.rows.length, 'F');
+  doc.rect(LM, tableTop, CW, totalTableH, 'F');
   let ry = tableTop;
-  p.rows.forEach(r=>{
-    ry += rowH;
+  wrappedRows.forEach((wr, i)=>{
+    const rh = rowHeights[i];
     setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(9.2);
-    doc.text(r.label, LM+7, ry-2.6);
+    wr.label.forEach((ln,li)=> doc.text(ln, LM+7, ry+4.6+li*4.6));
     setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.8);
-    doc.text(r.value, LM+CW-7, ry-2.6, {align:'right'});
+    wr.value.forEach((ln,li)=> doc.text(ln, LM+CW-7, ry+4.6+li*4.6, {align:'right'}));
+    ry += rh;
     setDraw(doc, COLORS.border); doc.setLineWidth(0.2);
     doc.line(LM, ry, LM+CW, ry);
   });
@@ -466,16 +515,22 @@ function drawPremiumSection(data){
   setText(doc, COLORS.white); doc.setFont('DejaVu','bold'); doc.setFontSize(12);
   doc.text('ÖDENECEK TOPLAM PRİM', LM+8, y+totalH/2+1.5);
   setText(doc, COLORS.gold); doc.setFont('DejaVu','bold'); doc.setFontSize(17);
-  doc.text(p.total, LM+CW-8, y+totalH/2+2.2, {align:'right'});
+  doc.text(String(p.total), LM+CW-8, y+totalH/2+2.2, {align:'right'});
   y += totalH + 9;
 
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','italic'); doc.setFontSize(8.6);
-  doc.text('Ödeme Planı: ' + p.paymentPlan + '   •   Ödeme Tarihi: ' + p.paymentDate, LM, y);
-  y += 16;
+  wrapText(doc, 'Ödeme Planı: ' + p.paymentPlan + '   •   Ödeme Tarihi: ' + p.paymentDate, 'DejaVu','italic',8.6, CW).forEach(ln=>{
+    doc.text(ln, LM, y); y += 4.2;
+  });
+  y += 12;
 }
 
 function drawFooter(data){
-  ensureSpace(data, 34);
+  const contactLines = wrapText(doc, String(data.agency.contact), 'DejaVu','normal',8.8, CW);
+  const disclaimerLines = wrapText(doc, String(data.disclaimer), 'DejaVu','italic',7.2, CW);
+  const neededH = 8 + 6 + contactLines.length*4.6 + 5.4 + disclaimerLines.length*3.6 + 6;
+  ensureSpace(data, neededH);
+
   setDraw(doc, COLORS.border); doc.setLineWidth(0.3);
   doc.line(LM, y, PAGE_W-RM, y);
   y += 8;
@@ -483,11 +538,11 @@ function drawFooter(data){
   doc.text('Teklifi Onaylamak veya Sorularınız İçin Bize Ulaşın', LM, y);
   y += 6;
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.8);
-  doc.text(data.agency.contact, LM, y);
-  y += 10;
+  contactLines.forEach(ln=>{ doc.text(ln, LM, y); y += 4.6; });
+  y += 5.4;
 
   setText(doc, '#9AA0AC'); doc.setFont('DejaVu','italic'); doc.setFontSize(7.2);
-  wrapText(doc, data.disclaimer, 'DejaVu','italic',7.2, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=3.6; });
+  disclaimerLines.forEach(ln=>{ doc.text(ln, LM, y); y+=3.6; });
 }
 
 function drawPageNumbers(data){
