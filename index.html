@@ -431,17 +431,26 @@ function drawSecondaryCards(data){
 
 function drawCoverageSection(data){
   if(!data.coverages || data.coverages.length===0) return;
-  ensureSpace(data, 20);
+
+  // Başlık + açıklama + İLK teminat çifti için gereken toplam yüksekliği önceden hesaplayıp
+  // tek seferde sayfa kontrolü yapıyoruz; böylece başlık bir sayfada, kartlar başka sayfada kalmıyor.
+  const introTitleFitPre = fitOneLine(doc, data.coverageIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
+  const descLinesPre = wrapText(doc, data.coverageIntro.desc, 'DejaVu','normal',9, CW);
+  const gap=6, covW=(CW-gap)/2, PAD=6;
+  const firstPair = data.coverages.slice(0,2);
+  const firstDescLinesArr = firstPair.map(cov => wrapText(doc, String(cov.desc), 'DejaVu','normal',7.5, covW-2*PAD));
+  const firstMaxDescLines = Math.max(1, ...firstDescLinesArr.map(l=>l.length));
+  const firstCovH = Math.max(30, 28 + firstMaxDescLines*3.6 + 5);
+  const headerBlockH = 6.5 + descLinesPre.length*4.6 + 5.5;
+  ensureSpace(data, headerBlockH + firstCovH + 10);
+
   setText(doc, COLORS.ink);
-  const introFit = fitOneLine(doc, data.coverageIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
-  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(introFit.size);
-  doc.text(introFit.text, LM, y);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(introTitleFitPre.size);
+  doc.text(introTitleFitPre.text, LM, y);
   y += 6.5;
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(9);
-  wrapText(doc, data.coverageIntro.desc, 'DejaVu','normal',9, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=4.6; });
+  descLinesPre.forEach(ln=>{ doc.text(ln, LM, y); y+=4.6; });
   y += 5.5;
-
-  const gap=6, covW=(CW-gap)/2, PAD=6;
 
   for(let i=0;i<data.coverages.length;i+=2){
     const pair = data.coverages.slice(i,i+2);
@@ -449,7 +458,7 @@ function drawCoverageSection(data){
     const maxDescLines = Math.max(1, ...descLinesArr.map(l=>l.length));
     const covH = Math.max(30, 28 + maxDescLines*3.6 + 5);
 
-    ensureSpace(data, covH+10);
+    if(i>0) ensureSpace(data, covH+10);
     const top=y;
     pair.forEach((cov,idx)=>{
       const x0 = LM + idx*(covW+gap);
@@ -475,23 +484,25 @@ function drawCoverageSection(data){
 
 function drawExclusionsSection(data){
   if(!data.exclusions || data.exclusions.length===0) return;
-  ensureSpace(data, 24);
-  setText(doc, COLORS.ink);
-  const fitted = fitOneLine(doc, data.exclusionsIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
-  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
-  doc.text(fitted.text, LM, y);
-  y += 6.5;
-  setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.8);
-  doc.text(data.exclusionsIntro.desc, LM, y);
-  y += 8;
 
+  const fitted = fitOneLine(doc, data.exclusionsIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
+  const descLine = String(data.exclusionsIntro.desc);
   const PAD=6;
   const textW = CW - 2*PAD - 8;
   const wrapped = data.exclusions.map(item => wrapText(doc, item, 'DejaVu','normal',8.6, textW));
   const rowHeights = wrapped.map(l => (l.length-1)*4.2 + 9);
   const boxH = 6 + rowHeights.reduce((a,b)=>a+b,0) + 4;
+  const headerBlockH = 6.5 + 8;
+  ensureSpace(data, headerBlockH + boxH + 8);
 
-  ensureSpace(data, boxH+8);
+  setText(doc, COLORS.ink);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
+  doc.text(fitted.text, LM, y);
+  y += 6.5;
+  setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.8);
+  doc.text(descLine, LM, y);
+  y += 8;
+
   const top=y;
   setFill(doc, COLORS.warnBg);
   doc.roundedRect(LM, top, CW, boxH, 2.6, 2.6, 'F');
@@ -510,10 +521,6 @@ function drawExclusionsSection(data){
 function drawPremiumSection(data){
   const p = data.premium;
   if(!p) return;
-  ensureSpace(data, 20);
-  setText(doc, COLORS.ink); doc.setFont('DejaVuSerif','bold'); doc.setFontSize(13.5);
-  doc.text('Prim Özeti', LM, y);
-  y += 9;
 
   const labelW = CW*0.62, valueW = CW*0.32;
   const wrappedRows = p.rows.map(r=>({
@@ -522,8 +529,12 @@ function drawPremiumSection(data){
   }));
   const rowHeights = wrappedRows.map(wr => Math.max(wr.label.length, wr.value.length)*4.6 + 3.4);
   const totalTableH = rowHeights.reduce((a,b)=>a+b,0);
+  ensureSpace(data, 9 + totalTableH + 40);
 
-  ensureSpace(data, totalTableH + 40);
+  setText(doc, COLORS.ink); doc.setFont('DejaVuSerif','bold'); doc.setFontSize(13.5);
+  doc.text('Prim Özeti', LM, y);
+  y += 9;
+
   const tableTop = y;
   setFill(doc, COLORS.bgCard);
   doc.rect(LM, tableTop, CW, totalTableH, 'F');
