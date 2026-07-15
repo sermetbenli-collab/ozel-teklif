@@ -19,7 +19,16 @@ KURALLAR:
 - PDF'te olmayan bir bilgi için o alanı mantıklı şekilde boş bırak ya da tüm bölümü çıkar (örn. teminat kalemi yoksa "coverages": []).
 - Para tutarlarını PDF'teki gibi Türkçe biçimde yaz (örn. "6.900,00 TL", "1.200.000 TL").
 - Tarihleri GG/AA/YYYY biçiminde yaz.
-- "coverages" dizisine PDF'teki HER teminat kalemini ayrı ayrı ekle (sayısı 1 ile 8 arasında değişebilir).
+- "coverages": PDF'teki TÜM teminat kalemlerini eksiksiz çıkar. Bu kritik bir adımdır, aceleyle 1-2 kalemle yetinme:
+  * PDF'in TÜM sayfalarını, tüm teminat tablolarını (ana teminat tablosu + varsa ek teminat/zeyilname tabloları) tara.
+  * Sadece "Bedeni Zararlar" ve "Maddi Zararlar" gibi göze çarpan ilk kalemlerle sınırlı kalma; İhtiyari Mali
+    Mesuliyet, Hukuksal Koruma, Ferdi Kaza, Yol Yardımı, İkame Araç, Cam Kırılması, Anahtar Kaybı gibi ek
+    teminatlar da tabloda varsa MUTLAKA ekle.
+  * Her satırda ayrı bir "Bedel (TL)" veya "Teminat Limiti" sütunu görüyorsan, o satırların HEPSİ ayrı birer
+    teminat kalemidir — hiçbirini atlama.
+  * Tutarı olmayan ama poliçe kapsamında belirtilen hizmetleri de (varsa) dahil et.
+  * Sayısı 1 ile 10 arasında değişebilir; PDF'te kaç kalem varsa o kadarını listele, sayıyı kendinden
+    sınırlama.
 - "exclusions" dizisine PDF'te veya ekli genel şartlarda geçen HER istisna/kapsam dışı hali ayrı ayrı ekle;
   hukuki/madde numaralı dili sigortalının kolayca anlayacağı sade Türkçe cümlelere çevirerek yaz.
 - "primaryCard": motorlu araç poliçelerinde araç bilgilerini (marka/tip, model yılı, plaka), sağlık poliçelerinde
@@ -105,7 +114,7 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
+        max_tokens: 6000,
         system: SYSTEM_PROMPT,
         messages: [
           {
