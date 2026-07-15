@@ -142,12 +142,47 @@ function wrapText(doc, text, font, style, size, maxWidthMM){
   return doc.splitTextToSize(text, maxWidthMM);
 }
 
+// Başlıkları TEK SATIRA sığdırmak için: sığana kadar font boyutunu küçültür,
+// asgari boyutta hâlâ sığmıyorsa üç nokta ile keser (satır bölme yerine).
+function fitOneLine(doc, text, font, style, maxSize, minSize, maxWidthMM){
+  text = String(text);
+  let size = maxSize;
+  doc.setFont(font, style);
+  doc.setFontSize(size);
+  while(size > minSize && doc.getTextWidth(text) > maxWidthMM){
+    size -= 0.4;
+    doc.setFontSize(size);
+  }
+  if(doc.getTextWidth(text) <= maxWidthMM){
+    return { text, size };
+  }
+  let t = text;
+  while(t.length > 3 && doc.getTextWidth(t + '…') > maxWidthMM){
+    t = t.slice(0, -1);
+  }
+  return { text: t + '…', size };
+}
+
 /* ===================== İKONLAR (basit vektör çizimler) ===================== */
 function iconCar(doc, x, y){
-  setDraw(doc, COLORS.ink); setFill(doc, COLORS.ink); doc.setLineWidth(0.5);
-  doc.roundedRect(x, y+2, 15, 6, 1.4, 1.4, 'S');
-  doc.circle(x+4, y+9, 1.8, 'F');
-  doc.circle(x+11, y+9, 1.8, 'F');
+  // Gövde (alt şasi)
+  setFill(doc, COLORS.ink);
+  doc.roundedRect(x, y+5.5, 16, 4.2, 1.3, 1.3, 'F');
+  // Kabin (tek parça siluet hissi için aynı renk)
+  doc.roundedRect(x+3.2, y+1.6, 9.6, 4.6, 1.8, 1.8, 'F');
+  // Cam ayrımı — ince, zarif detay
+  setDraw(doc, COLORS.white); doc.setLineWidth(0.5);
+  doc.line(x+7.4, y+1.9, x+7.4, y+6.2);
+  // Alt vurgu çizgisi — altın, premium dokunuş
+  setDraw(doc, COLORS.gold); doc.setLineWidth(0.6);
+  doc.line(x+1, y+9.9, x+15, y+9.9);
+  // Tekerlekler
+  setFill(doc, COLORS.white); setDraw(doc, COLORS.ink); doc.setLineWidth(0.7);
+  doc.circle(x+4, y+10.2, 1.6, 'FD');
+  doc.circle(x+12, y+10.2, 1.6, 'FD');
+  setFill(doc, COLORS.ink);
+  doc.circle(x+4, y+10.2, 0.45, 'F');
+  doc.circle(x+12, y+10.2, 0.45, 'F');
 }
 function iconCalendar(doc, x, y){
   setDraw(doc, COLORS.ink); setFill(doc, COLORS.white); doc.setLineWidth(0.5);
@@ -232,9 +267,10 @@ function drawContinuationHeader(data){
   doc.setFont('DejaVu','normal'); doc.setFontSize(8.3);
   const rightW = doc.getTextWidth(rightLabel) + 4;
   const leftMaxW = CW - rightW - 4;
-  const titleLines = wrapText(doc, data.meta.policyTitle + ' — Devamı', 'DejaVuSerif','bold',12.5, leftMaxW);
-  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(12.5);
-  doc.text(titleLines[0], LM, 16);
+  const fitted = fitOneLine(doc, data.meta.policyTitle + ' — Devamı', 'DejaVuSerif','bold', 12.5, 9.5, leftMaxW);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
+  setText(doc, COLORS.ink);
+  doc.text(fitted.text, LM, 16);
   setText(doc, COLORS.textGray);
   doc.setFont('DejaVu','normal'); doc.setFontSize(8.3);
   doc.text(rightLabel, PAGE_W-RM, 16, {align:'right'});
@@ -244,10 +280,10 @@ function drawContinuationHeader(data){
 
 function drawTitleBlock(data){
   setText(doc, COLORS.ink);
-  wrapText(doc, data.meta.policyTitle, 'DejaVuSerif','bold',16, CW).forEach(ln=>{
-    doc.text(ln, LM, y); y += 7;
-  });
-  y += 2;
+  const fitted = fitOneLine(doc, data.meta.policyTitle, 'DejaVuSerif','bold', 16, 12, CW);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
+  doc.text(fitted.text, LM, y);
+  y += 9;
   setText(doc, COLORS.textGray);
   data.meta.greeting.forEach(line=>{
     wrapText(doc, String(line), 'DejaVu','normal',9.4, CW).forEach(ln=>{
@@ -264,7 +300,7 @@ function drawPrimaryCard(data){
   const PAD = 6;
   const colsPerRow = Math.min(3, Math.max(1, fields.length));
   const nRows = Math.ceil(fields.length / colsPerRow) || 1;
-  const titleAreaH = card.icon ? 21 : 14;
+  const titleAreaH = card.icon ? 23 : 14;
   const colW = (CW - 2*PAD) / colsPerRow;
 
   let maxLabelLines = 1, maxValueLines = 1;
@@ -289,12 +325,11 @@ function drawPrimaryCard(data){
   doc.roundedRect(LM, top, CW, cardH, 2.6, 2.6, 'FD');
   setFill(doc, COLORS.gold); doc.rect(LM, top, CW, 0.9, 'F');
   if(card.icon==='car') iconCar(doc, LM+PAD, top+8);
-  const titleMaxW = CW - (card.icon ? PAD+20 : PAD) - PAD;
-  const titleX = card.icon ? LM+PAD+20 : LM+PAD;
-  setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.8);
-  wrapText(doc, String(card.title), 'DejaVu','bold',9.8, titleMaxW).slice(0,1).forEach(ln=>{
-    doc.text(ln, titleX, top+11);
-  });
+  const titleMaxW = CW - (card.icon ? PAD+22 : PAD) - PAD;
+  const titleX = card.icon ? LM+PAD+22 : LM+PAD;
+  const titleFit = fitOneLine(doc, card.title, 'DejaVu','bold', 9.8, 7.5, titleMaxW);
+  setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(titleFit.size);
+  doc.text(titleFit.text, titleX, top+11);
 
   fields.forEach((f,i)=>{
     const col = i % colsPerRow;
@@ -359,8 +394,9 @@ function drawSecondaryCards(data){
       setFill(doc, COLORS.gold); doc.rect(x0, top, colW, 0.9, 'F');
 
       if(card.type==='insurer'){
-        setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
-        doc.text(card.title, x0+PAD, top+10);
+        const insurerTitleFit = fitOneLine(doc, card.title, 'DejaVu','bold', 9.6, 7.5, colW-2*PAD);
+        setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(insurerTitleFit.size);
+        doc.text(insurerTitleFit.text, x0+PAD, top+10);
         const logo = INSURER_LOGOS[card.logoKey];
         const logoW=15, logoH=15, logoTop=top+15;
         if(logo) doc.addImage(logo.data, logo.format, x0+PAD, logoTop, logoW, logoH);
@@ -380,8 +416,9 @@ function drawSecondaryCards(data){
         });
       } else {
         if(card.icon==='calendar') iconCalendar(doc, x0+PAD, top+7);
-        setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
-        doc.text(card.title, x0+PAD+19, top+10);
+        const infoTitleFit = fitOneLine(doc, card.title, 'DejaVu','bold', 9.6, 7.5, colW-PAD-19-PAD);
+        setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(infoTitleFit.size);
+        doc.text(infoTitleFit.text, x0+PAD+19, top+10);
         const labelW = colW*0.5 - PAD;
         const valueW = colW*0.5 - PAD;
         let ry = top+22;
@@ -403,22 +440,20 @@ function drawSecondaryCards(data){
 function drawCoverageSection(data){
   if(!data.coverages || data.coverages.length===0) return;
   ensureSpace(data, 20);
-  setText(doc, COLORS.ink); doc.setFont('DejaVuSerif','bold'); doc.setFontSize(13.5);
-  wrapText(doc, data.coverageIntro.title, 'DejaVuSerif','bold',13.5, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=6; });
-  y += 0.5;
+  setText(doc, COLORS.ink);
+  const introFit = fitOneLine(doc, data.coverageIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(introFit.size);
+  doc.text(introFit.text, LM, y);
+  y += 6.5;
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(9);
   wrapText(doc, data.coverageIntro.desc, 'DejaVu','normal',9, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=4.6; });
   y += 5.5;
 
-  const gap=6, covW=(CW-gap)/2, PAD=6;
-  const baseH = 34;
+  const gap=6, covW=(CW-gap)/2, PAD=6, covH=32;
 
   for(let i=0;i<data.coverages.length;i+=2){
     const pair = data.coverages.slice(i,i+2);
     const textW = covW-PAD-19-PAD;
-    const titleLinesArr = pair.map(cov => wrapText(doc, String(cov.title), 'DejaVu','bold',10.4, textW));
-    const maxTitleLines = Math.max(...titleLinesArr.map(l=>l.length));
-    const covH = baseH + Math.max(0, maxTitleLines-1)*4.8;
 
     ensureSpace(data, covH+10);
     const top=y;
@@ -430,10 +465,10 @@ function drawCoverageSection(data){
       iconShield(doc, x0+PAD, top+6, iconColor, cov.iconLabel||null);
       const tx = x0+PAD+19;
       setText(doc, COLORS.gold); doc.setFont('DejaVu','bold'); doc.setFontSize(7.4);
-      doc.text(cov.eyebrow, tx, top+8);
-      setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(10.4);
-      let ty = top+13;
-      titleLinesArr[idx].forEach(ln=>{ doc.text(ln, tx, ty); ty += 4.8; });
+      doc.text(String(cov.eyebrow), tx, top+8);
+      const titleFit = fitOneLine(doc, cov.title, 'DejaVu','bold', 10.4, 8, textW);
+      setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(titleFit.size);
+      doc.text(titleFit.text, tx, top+13.5);
       setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(15);
       doc.text(String(cov.amount), tx, top+covH-15);
       setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
@@ -447,8 +482,10 @@ function drawCoverageSection(data){
 function drawExclusionsSection(data){
   if(!data.exclusions || data.exclusions.length===0) return;
   ensureSpace(data, 24);
-  setText(doc, COLORS.ink); doc.setFont('DejaVuSerif','bold'); doc.setFontSize(13.5);
-  doc.text(data.exclusionsIntro.title, LM, y);
+  setText(doc, COLORS.ink);
+  const fitted = fitOneLine(doc, data.exclusionsIntro.title, 'DejaVuSerif','bold', 13.5, 11, CW);
+  doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
+  doc.text(fitted.text, LM, y);
   y += 6.5;
   setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8.8);
   doc.text(data.exclusionsIntro.desc, LM, y);
