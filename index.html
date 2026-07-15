@@ -57,6 +57,20 @@
       <button class="gold" onclick="extractFromPDF()">PDF'i Yükle ve Yapay Zekayla Doldur</button>
     </div>
     <div id="extractStatus" class="status"></div>
+
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+      <label for="sigortaliAdi" style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:6px;">
+        Sigortalı Adı Soyadı (opsiyonel)
+      </label>
+      <div class="schema-note" style="margin-bottom:10px;">
+        AXA'nın sistemlerinden gelen PDF'lerde isimler maskeli çıkıyor (örn. "E***N T***N").
+        Gerçek adı buraya girerseniz, teklif PDF'indeki karşılama satırına ("Sayın Adı Soyadı,")
+        otomatik işlenir — hem "Yapay Zekayla Doldur" ile hem de doğrudan "PDF Oluştur ve İndir"
+        ile çalışır.
+      </div>
+      <input type="text" id="sigortaliAdi" placeholder="Örn: Eren Türkdoğan"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;">
+    </div>
   </div>
 
   <div class="panel">
@@ -718,6 +732,7 @@ async function extractFromPDF(){
   try{
     const data = json.data;
     data.agency = AGENCY;
+    applyManualSigortaliAdi(data);
     document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
     statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
     statusEl.className = 'status ok';
@@ -726,6 +741,15 @@ async function extractFromPDF(){
     statusEl.textContent = 'Yapay zekadan gelen veri işlenemedi: ' + e.message;
     statusEl.className = 'status err';
   }
+}
+
+function applyManualSigortaliAdi(data){
+  const nameInput = document.getElementById('sigortaliAdi');
+  const name = nameInput ? nameInput.value.trim() : '';
+  if(name && data.meta && Array.isArray(data.meta.greeting) && data.meta.greeting.length > 0){
+    data.meta.greeting[0] = `Sayın ${name},`;
+  }
+  return data;
 }
 
 /* ===================== UI BAĞLANTILARI ===================== */
@@ -747,6 +771,7 @@ function runGenerate(){
     setStatus('JSON hatalı: ' + e.message, 'err');
     return;
   }
+  applyManualSigortaliAdi(data);
   try{
     const pdfDoc = generateTeklifPDF(data);
     const fname = (data.meta.calismaNo || 'teklif') + '_ozel_teklif.pdf';
