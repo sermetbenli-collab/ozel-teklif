@@ -21,14 +21,24 @@ KURALLAR:
 - Tarihleri GG/AA/YYYY biçiminde yaz.
 - "coverages": PDF'teki TÜM teminat kalemlerini eksiksiz çıkar. Bu kritik bir adımdır, aceleyle 1-2 kalemle yetinme:
   * PDF'in TÜM sayfalarını, tüm teminat tablolarını (ana teminat tablosu + varsa ek teminat/zeyilname tabloları) tara.
-  * Sadece "Bedeni Zararlar" ve "Maddi Zararlar" gibi göze çarpan ilk kalemlerle sınırlı kalma; İhtiyari Mali
-    Mesuliyet, Hukuksal Koruma, Ferdi Kaza, Yol Yardımı, İkame Araç, Cam Kırılması, Anahtar Kaybı gibi ek
-    teminatlar da tabloda varsa MUTLAKA ekle.
+  * ÖNEMLİ — Zorunlu Trafik Sigortası (Motorlu Araçlar Üçüncü Şahıs Sigortası) poliçelerinde "Bedeni Zararlar" /
+    "Bedensel Zararlar" limiti çoğu zaman ANA TEMİNAT TABLOSUNDA YER ALMAZ; sadece "Maddi Zararlar" tabloda
+    görünür. Bedeni Zararlar limiti genellikle sayfanın alt kısmındaki "Yükümlülük Sınırları", "Açıklamalar ve
+    Özel Koşullar" gibi hukuki/açıklama metinlerinin içinde, sıradan bir cümle olarak geçer — örneğin:
+    "...madde 1(a), 1(b) ve 2(a), 2(b) uyarınca getirilen sınırlamalar: Yukarıda belirtilen Bedeni Zararlar
+    limiti 8.000.000.TL'dir." Bu tür TABLO DIŞI, METİN İÇİNE GÖMÜLÜ teminat tutarlarını mutlaka ara ve
+    coverages dizisine Maddi Zararlar ile eşdeğer, ayrı bir kalem olarak ekle. Sadece tabloyu okuyup bu cümleyi
+    atlama — PDF'in tüm düz metnini de tara.
+  * Genel olarak: İhtiyari Mali Mesuliyet, Hukuksal Koruma, Ferdi Kaza, Yol Yardımı, İkame Araç, Cam Kırılması,
+    Anahtar Kaybı gibi ek teminatlar da tabloda varsa MUTLAKA ekle.
   * Her satırda ayrı bir "Bedel (TL)" veya "Teminat Limiti" sütunu görüyorsan, o satırların HEPSİ ayrı birer
     teminat kalemidir — hiçbirini atlama.
   * Tutarı olmayan ama poliçe kapsamında belirtilen hizmetleri de (varsa) dahil et.
   * Sayısı 1 ile 10 arasında değişebilir; PDF'te kaç kalem varsa o kadarını listele, sayıyı kendinden
     sınırlama.
+  * SON KONTROL: JSON'u tamamlamadan önce, PDF metnini "TL'dir", "TL'ye kadar", "limiti", "teminatı" gibi
+    ifadeler için bir kez daha tara ve bulduğun her parasal limitin coverages dizisinde karşılığı olduğundan
+    emin ol.
 - "exclusions" dizisine PDF'te veya ekli genel şartlarda geçen HER istisna/kapsam dışı hali ayrı ayrı ekle;
   hukuki/madde numaralı dili sigortalının kolayca anlayacağı sade Türkçe cümlelere çevirerek yaz.
 - "primaryCard": motorlu araç poliçelerinde araç bilgilerini (marka/tip, model yılı, plaka), sağlık poliçelerinde
