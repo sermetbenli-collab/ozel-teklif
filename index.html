@@ -298,26 +298,17 @@ function drawPrimaryCard(data){
   const card = data.primaryCard;
   const fields = card.fields || [];
   const PAD = 6;
-  const colsPerRow = Math.min(3, Math.max(1, fields.length));
-  const nRows = Math.ceil(fields.length / colsPerRow) || 1;
   const titleAreaH = card.icon ? 23 : 14;
-  const colW = (CW - 2*PAD) / colsPerRow;
+  const labelW = CW*0.55 - PAD;
+  const valueW = CW*0.45 - PAD;
 
-  let maxLabelLines = 1, maxValueLines = 1;
-  const wrappedLabels = fields.map(f=>{
-    const lines = wrapText(doc, String(f.label), 'DejaVu','normal',7.5, colW-4);
-    if(lines.length > maxLabelLines) maxLabelLines = lines.length;
-    return lines;
-  });
-  const wrappedValues = fields.map(f=>{
-    const lines = wrapText(doc, String(f.value), 'DejaVu','bold',9.5, colW-4);
-    if(lines.length > maxValueLines) maxValueLines = lines.length;
-    return lines;
-  });
-  const labelBlockH = maxLabelLines*3.4;
-  const valueBlockH = maxValueLines*3.9;
-  const rowH = 5 + labelBlockH + valueBlockH;
-  const cardH = titleAreaH + nRows*rowH + 5;
+  const wrappedRows = fields.map(f=>({
+    label: wrapText(doc, String(f.label), 'DejaVu','normal',8, labelW),
+    value: wrapText(doc, String(f.value), 'DejaVu','bold',9.6, valueW)
+  }));
+  const rowHeights = wrappedRows.map(wr => Math.max(wr.label.length, wr.value.length)*4.4 + 2.2);
+  const totalRowsH = rowHeights.reduce((a,b)=>a+b,0);
+  const cardH = titleAreaH + totalRowsH + 5;
 
   ensureSpace(data, cardH+8);
   const top = y;
@@ -331,17 +322,18 @@ function drawPrimaryCard(data){
   setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(titleFit.size);
   doc.text(titleFit.text, titleX, top+11);
 
-  fields.forEach((f,i)=>{
-    const col = i % colsPerRow;
-    const row = Math.floor(i / colsPerRow);
-    const fx = LM+PAD + col*colW;
-    const fy = top + titleAreaH + row*rowH;
-    setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
-    let ly = fy;
-    wrappedLabels[i].forEach(ln=>{ doc.text(ln, fx, ly); ly += 3.4; });
-    setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.5);
-    let vy = fy + labelBlockH + 3.2;
-    wrappedValues[i].forEach(ln=>{ doc.text(ln, fx, vy); vy += 3.9; });
+  let ry = top + titleAreaH;
+  wrappedRows.forEach((wr, i)=>{
+    const rh = rowHeights[i];
+    setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(8);
+    wr.label.forEach((ln,li)=> doc.text(ln, LM+PAD, ry+4+li*4.4));
+    setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(9.6);
+    wr.value.forEach((ln,li)=> doc.text(ln, LM+CW-PAD, ry+4+li*4.4, {align:'right'}));
+    ry += rh;
+    if(i < wrappedRows.length-1){
+      setDraw(doc, COLORS.border); doc.setLineWidth(0.2);
+      doc.line(LM+PAD, ry, LM+CW-PAD, ry);
+    }
   });
   y = top + cardH + 8;
 }
@@ -449,11 +441,13 @@ function drawCoverageSection(data){
   wrapText(doc, data.coverageIntro.desc, 'DejaVu','normal',9, CW).forEach(ln=>{ doc.text(ln, LM, y); y+=4.6; });
   y += 5.5;
 
-  const gap=6, covW=(CW-gap)/2, PAD=6, covH=32;
+  const gap=6, covW=(CW-gap)/2, PAD=6;
 
   for(let i=0;i<data.coverages.length;i+=2){
     const pair = data.coverages.slice(i,i+2);
-    const textW = covW-PAD-19-PAD;
+    const descLinesArr = pair.map(cov => wrapText(doc, String(cov.desc), 'DejaVu','normal',7.5, covW-2*PAD));
+    const maxDescLines = Math.max(1, ...descLinesArr.map(l=>l.length));
+    const covH = Math.max(30, 28 + maxDescLines*3.6 + 5);
 
     ensureSpace(data, covH+10);
     const top=y;
@@ -466,14 +460,14 @@ function drawCoverageSection(data){
       const tx = x0+PAD+19;
       setText(doc, COLORS.gold); doc.setFont('DejaVu','bold'); doc.setFontSize(7.4);
       doc.text(String(cov.eyebrow), tx, top+8);
-      const titleFit = fitOneLine(doc, cov.title, 'DejaVu','bold', 10.4, 8, textW);
+      const titleFit = fitOneLine(doc, cov.title, 'DejaVu','bold', 10.4, 8, covW-PAD-19-PAD);
       setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(titleFit.size);
-      doc.text(titleFit.text, tx, top+13.5);
+      doc.text(titleFit.text, tx, top+14);
       setText(doc, COLORS.ink); doc.setFont('DejaVu','bold'); doc.setFontSize(15);
-      doc.text(String(cov.amount), tx, top+covH-15);
+      doc.text(String(cov.amount), tx, top+23);
       setText(doc, COLORS.textGray); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
-      let dy = top+covH-9;
-      wrapText(doc, String(cov.desc), 'DejaVu','normal',7.5, covW-2*PAD).forEach(ln=>{ doc.text(ln, x0+PAD, dy); dy+=3.6; });
+      let dy = top+29;
+      descLinesArr[idx].forEach(ln=>{ doc.text(ln, x0+PAD, dy); dy+=3.6; });
     });
     y = top + covH + (i+2<data.coverages.length ? 6 : 10);
   }
@@ -589,7 +583,7 @@ function drawPageNumbers(data){
     setText(doc, '#B7BCC7'); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
     doc.text(`Sayfa ${i} / ${total}`, PAGE_W-RM, PAGE_H-10, {align:'right'});
     setText(doc, COLORS.textGray); doc.setFont('DejaVu','bold'); doc.setFontSize(8);
-    doc.text(data.agency.name.split(' ').slice(0,3).join(' '), LM, PAGE_H-10);
+    doc.text(String(data.agency.name), LM, PAGE_H-10);
   }
 }
 
