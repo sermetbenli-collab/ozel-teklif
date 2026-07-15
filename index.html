@@ -768,6 +768,12 @@ function fileToBase64(file){
   });
 }
 
+function makeJobId(){
+  return 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
 async function extractFromPDF(){
   const fileInput = document.getElementById('pdfFile');
   const file = fileInput.files[0];
@@ -790,59 +796,81 @@ async function extractFromPDF(){
     return;
   }
 
-  statusEl.textContent = 'Yapay zekaya gönderiliyor... (10-20 saniye sürebilir)';
+  const jobId = makeJobId();
+  statusEl.textContent = 'İşlem başlatılıyor...';
 
-  let res;
+  let triggerRes;
   try{
-    res = await fetch('/.netlify/functions/extract-teklif', {
+    triggerRes = await fetch('/.netlify/functions/extract-teklif-background', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ pdfBase64: base64, fileName: file.name })
+      body: JSON.stringify({ pdfBase64: base64, fileName: file.name, jobId })
     });
   }catch(e){
-    console.error('fetch hatası:', e);
-    statusEl.textContent = 'Sunucuya bağlanılamadı (ağ hatası): ' + e.message;
+    console.error('Başlatma hatası:', e);
+    statusEl.textContent = 'İşlem başlatılamadı (ağ hatası): ' + e.message;
+    statusEl.className = 'status err';
+    return;
+  }
+  if(triggerRes.status === 404){
+    statusEl.textContent = 'Fonksiyon bulunamadı (HTTP 404). netlify/functions/extract-teklif-background.js dosyasının doğru yolda deploy olduğunu kontrol edin.';
+    statusEl.className = 'status err';
+    return;
+  }
+  if(triggerRes.status >= 400 && triggerRes.status !== 404){
+    const t = await triggerRes.text().catch(()=>'(okunamadı)');
+    statusEl.textContent = 'Beklenmeyen başlatma hatası (HTTP ' + triggerRes.status + '): ' + t.slice(0,200);
     statusEl.className = 'status err';
     return;
   }
 
-  const contentType = res.headers.get('content-type') || '';
-  if(!contentType.includes('application/json')){
-    const rawText = await res.text().catch(()=>'(okunamadı)');
-    console.error('Beklenmeyen yanıt türü:', contentType, rawText);
-    statusEl.textContent = 'Beklenmeyen sunucu yanıtı (HTTP ' + res.status + '). Detay: ' + rawText.slice(0,300);
-    statusEl.className = 'status err';
-    return;
+  // Arka plan fonksiyonu 202 ile hemen döner; sonucu yoklayarak (polling) bekliyoruz.
+  // Kasko gibi büyük/çok sayfalı PDF'ler birkaç dakika sürebilir.
+  const maxWaitMs = 240000;  // 4 dakika üst sınır
+  const intervalMs = 3000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs){
+    await sleep(intervalMs);
+    const elapsed = Math.round((Date.now()-startTime)/1000);
+    statusEl.textContent = `Yapay zeka PDF'i analiz ediyor... (${elapsed} sn — büyük PDF'lerde birkaç dakika sürebilir)`;
+
+    let statusRes;
+    try{
+      statusRes = await fetch('/.netlify/functions/extract-status?jobId=' + encodeURIComponent(jobId));
+    }catch(e){
+      continue;
+    }
+    if(!statusRes.ok) continue;
+
+    let statusJson;
+    try{
+      statusJson = await statusRes.json();
+    }catch(e){
+      continue;
+    }
+
+    if(statusJson.status === 'pending' || statusJson.status === 'processing'){
+      continue;
+    }
+    if(statusJson.status === 'error'){
+      statusEl.textContent = 'Hata: ' + statusJson.error;
+      statusEl.className = 'status err';
+      return;
+    }
+    if(statusJson.status === 'done'){
+      const data = statusJson.data;
+      data.agency = AGENCY;
+      applyManualSigortaliAdi(data);
+      document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
+      statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
+      statusEl.className = 'status ok';
+      return;
+    }
   }
 
-  let json;
-  try{
-    json = await res.json();
-  }catch(e){
-    console.error('JSON ayrıştırma hatası:', e);
-    statusEl.textContent = 'Sunucu yanıtı okunamadı: ' + e.message;
-    statusEl.className = 'status err';
-    return;
-  }
-
-  if(!res.ok || json.error){
-    statusEl.textContent = 'Hata: ' + (json.error || ('Sunucu ' + res.status + ' döndürdü.'));
-    statusEl.className = 'status err';
-    return;
-  }
-
-  try{
-    const data = json.data;
-    data.agency = AGENCY;
-    applyManualSigortaliAdi(data);
-    document.getElementById('jsonInput').value = JSON.stringify(data, null, 2);
-    statusEl.textContent = 'Veriler başarıyla çıkarıldı. Lütfen aşağıdaki JSON\'u kontrol edip "PDF Oluştur ve İndir" butonuna basın.';
-    statusEl.className = 'status ok';
-  }catch(e){
-    console.error('Veri işleme hatası:', e);
-    statusEl.textContent = 'Yapay zekadan gelen veri işlenemedi: ' + e.message;
-    statusEl.className = 'status err';
-  }
+  statusEl.textContent = '4 dakika içinde sonuç alınamadı. PDF çok büyük/karmaşık olabilir ya da bir sunucu sorunu oluştu — lütfen tekrar deneyin.';
+  statusEl.className = 'status err';
 }
 
 function applyManualSigortaliAdi(data){
