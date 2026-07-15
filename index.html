@@ -283,7 +283,10 @@ function drawTitleBlock(data){
   const fitted = fitOneLine(doc, data.meta.policyTitle, 'DejaVuSerif','bold', 16, 12, CW);
   doc.setFont('DejaVuSerif','bold'); doc.setFontSize(fitted.size);
   doc.text(fitted.text, LM, y);
-  y += 9;
+  y += 6.5;
+  setText(doc, COLORS.gold); doc.setFont('DejaVu','bold'); doc.setFontSize(8.6);
+  doc.text('Teklif No: ' + String(data.meta.calismaNo), LM, y);
+  y += 7;
   setText(doc, COLORS.textGray);
   data.meta.greeting.forEach(line=>{
     wrapText(doc, String(line), 'DejaVu','normal',9.4, CW).forEach(ln=>{
@@ -595,6 +598,8 @@ function drawPageNumbers(data){
     doc.text(`Sayfa ${i} / ${total}`, PAGE_W-RM, PAGE_H-10, {align:'right'});
     setText(doc, COLORS.textGray); doc.setFont('DejaVu','bold'); doc.setFontSize(8);
     doc.text(String(data.agency.name), LM, PAGE_H-10);
+    setText(doc, '#B7BCC7'); doc.setFont('DejaVu','normal'); doc.setFontSize(7.5);
+    doc.text('Teklif No: ' + String(data.meta.calismaNo), PAGE_W/2, PAGE_H-10, {align:'center'});
   }
 }
 
